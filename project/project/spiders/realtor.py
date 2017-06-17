@@ -2,23 +2,24 @@
 import scrapy
 import smtplib
 import datetime
+import util
 from geopy.geocoders import Nominatim
 from geopy.distance import great_circle
 from email.mime.text import MIMEText
-from email.header    import Header
+from email.header import Header
+from multiprocessing import Lock
 
 
 stations = {
     'chatham': (40.7400965, -74.38508279999996),
-    'short hills': (),
-    'millburn': (),
-    'maplewood': (),
+    'short hills': (40.725201, -74.322998),
+    'millburn': (40.725711, -74.303682),
+    'maplewood': (40.731303, -74.275522),
 }
 
 password = ''
 with open('pwd.txt') as pwd_file:
     password = pwd_file.readlines()[0]
-
 
 def sendEmail(links):
     txt=''
@@ -49,7 +50,8 @@ def sendEmail(links):
 
 class RealtorSpider(scrapy.Spider):
     name = "realtor"
-    station = (0,0)
+    output_lock = Lock()
+    output_filename = util.get_output_filename()
 
     # maps town name to a list of URLS
     result_map = {}
@@ -95,6 +97,12 @@ class RealtorSpider(scrapy.Spider):
         print('MATCHES:')
         for link in keepers:
             print(link)
+
+        output_lock.acquire()
+        with open(output_filename, 'w') as output_file:
+            for link in keepers:
+                output_file.writeline(link)
+        output_lock.release()
 
         print('Sending email...')
         sendEmail(keepers)
