@@ -1,7 +1,10 @@
 # -*- coding: utf-8 -*-
+from __future__ import print_function
+
 import scrapy
 import smtplib
 import datetime
+import os
 import util
 from geopy.geocoders import Nominatim
 from geopy.distance import great_circle
@@ -16,6 +19,20 @@ stations = {
     'millburn': (40.725711, -74.303682),
     'maplewood': (40.731303, -74.275522),
 }
+
+# create output directory and lock for output file
+output_lock = Lock()
+
+output_filename = util.get_output_filename()
+if not os.path.exists(os.path.dirname(output_filename)):
+    try:
+        os.makedirs(os.path.dirname(output_filename))
+    except OSError as exc: # Guard against race condition
+        if exc.errno != errno.EEXIST:
+            raise
+
+yesterday_listings = set(util.get_yesterday_results())
+print('YESTERDAY: ' + str(yesterday_listings))
 
 password = ''
 with open('pwd.txt') as pwd_file:
@@ -47,11 +64,8 @@ def sendEmail(links):
     except Exception as e:
         print('Failed to send email: '+ str(e))
 
-
 class RealtorSpider(scrapy.Spider):
     name = "realtor"
-    output_lock = Lock()
-    output_filename = util.get_output_filename()
 
     # maps town name to a list of URLS
     result_map = {}
@@ -92,16 +106,18 @@ class RealtorSpider(scrapy.Spider):
                         coords,
                         (location.latitude, location.longitude))
                     if dist.miles < 1.0:
-                        keepers.append('realtor.com{}'.format(d))
+                        listing = 'realtor.com{}'.format(d)
+                        if listing not in yesterday_listings:
+                            keepers.append(listing)
 
         print('MATCHES:')
         for link in keepers:
             print(link)
 
         output_lock.acquire()
-        with open(output_filename, 'w') as output_file:
+        with open(output_filename, 'a') as output_file:
             for link in keepers:
-                output_file.writeline(link)
+                print(link, file=output_file)
         output_lock.release()
 
         print('Sending email...')
