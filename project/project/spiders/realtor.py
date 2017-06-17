@@ -7,10 +7,26 @@ from geopy.distance import great_circle
 from email.mime.text import MIMEText
 from email.header    import Header
 
+
+stations = {
+    'chatham': (40.7400965, -74.38508279999996),
+    'short hills': (),
+    'millburn': (),
+    'maplewood': (),
+}
+
+password = ''
+with open('pwd.txt') as pwd_file:
+    password = pwd_file.readlines()[0]
+
+
 def sendEmail(links):
     txt=''
     for link in links:
         txt += (link + '\n')
+
+    print('Email body:')
+    print(txt)
 
     msg = MIMEText(txt, 'plain', 'utf-8')
     msg['Subject'] = Header('New Listings', 'utf-8')
@@ -18,7 +34,6 @@ def sendEmail(links):
     msg['To'] = 'jastrauckas@gmail.com'
 
     username = str('wall_e_bot@yahoo.com')
-    password = str('GOhXvopk6q')  
 
     try:
         server = smtplib.SMTP("smtp.mail.yahoo.com", 587)
@@ -33,13 +48,18 @@ def sendEmail(links):
 
 
 class RealtorSpider(scrapy.Spider):
-
     name = "realtor"
     station = (0,0)
-    start_url = ''
+
+    # maps town name to a list of URLS
+    result_map = {}
 
     def start_requests(self):
-        urls = [self.start_url]
+        urls = [
+            'http://www.realtor.com/realestateandhomes-search/Chatham_NJ/type-single-family-home/price-na-750000',
+            'http://www.realtor.com/realestateandhomes-search/Millburn_NJ/type-single-family-home/price-na-750000',
+            'http://www.realtor.com/realestateandhomes-search/Maplewood_NJ/type-single-family-home/price-na-750000'
+        ]
         for url in urls:
             yield scrapy.Request(url=url, callback=self.parse)
 
@@ -65,25 +85,17 @@ class RealtorSpider(scrapy.Spider):
             if not location:
                 print('ERROR: location lookup failed for ' + addr)
             else:
-                dist = great_circle(
-                    self.station,
-                    (location.latitude, location.longitude))
-                if dist.miles < 1.0:
-                    keepers.append('realtor.com{}'.format(d))
+                for name,coords in stations.items():
+                    dist = great_circle(
+                        coords,
+                        (location.latitude, location.longitude))
+                    if dist.miles < 1.0:
+                        keepers.append('realtor.com{}'.format(d))
 
+        print('MATCHES:')
         for link in keepers:
             print(link)
 
+        print('Sending email...')
         sendEmail(keepers)
         self.log('Crawled file %s' % filename)
-
-
-class ChathamSpider(RealtorSpider):
-    name = "chatham"
-    station = (40.7400965, -74.38508279999996)
-    start_url = 'http://www.realtor.com/realestateandhomes-search/Chatham_NJ/type-single-family-home/price-na-650000'
-
-class SummitSpider(RealtorSpider):
-    name = 'summit'
-    station = (40.71673459999999, -74.35769349999998)
-    start_url = 'http://www.realtor.com/realestateandhomes-search/Summit_NJ/type-single-family-home/price-na-650000'
